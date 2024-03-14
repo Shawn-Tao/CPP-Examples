@@ -2,13 +2,14 @@
 #define __MLP_HPP__
 
 #include <vector>
+#include <string>
 
 void printCudaVersion();
 
 class MLP_Network
 {
 public:
-    MLP_Network(int input_dim, int output_dim, std::vector<int> hidden_dim, std::vector<std::vector<float>> weight, std::vector<std::vector<float>> bias);
+    MLP_Network(int input_dim, int output_dim, std::vector<int> hidden_dim);
     ~MLP_Network();
     void forward(float *input, float *output);
     // void backward();
@@ -16,7 +17,7 @@ public:
     // void train();
     // void test();
     // void save();
-    // void load();
+    void load(std::string weight_path);
 
 private:
     float **weights_;

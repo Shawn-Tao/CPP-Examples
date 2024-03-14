@@ -2,90 +2,30 @@
  * @Author: Shawn-Tao 1054087304@qq.com
  * @Date: 2024-03-12 22:16:12
  * @LastEditors: Shawn-Tao 1054087304@qq.com
- * @LastEditTime: 2024-03-14 14:27:43
+ * @LastEditTime: 2024-03-14 22:50:35
  * @FilePath: /3-cuda-mlp/src/main.cc
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
-#include <iostream>
+
 #include "mlp.h" 
-#include <fstream>
 #include <string>
+#include <iostream>
+#include <fstream>
 
 int main(){
+    // print compile time
+    printf("compile time: %s %s\n", __DATE__, __TIME__);
     printCudaVersion();
    
     int input_dim = 70;
     int output_dim = 12;
     std::vector<int> hidden_dim = {512,256,128};
 
-    std::vector<std::vector<float>> weight;
-    std::vector<std::vector<float>> bias;
+    MLP_Network *mlp_network = new MLP_Network(input_dim, output_dim, hidden_dim);
+    mlp_network->load("../weights/model.");
 
-    weight.resize(hidden_dim.size() + 1);
-    bias.resize(hidden_dim.size() + 1);
-
-    for (int i = 0; i < hidden_dim.size() + 1; i++)
-    {
-        if (i == 0)
-        {
-            weight[i].resize(input_dim * hidden_dim[i]);
-            bias[i].resize(hidden_dim[i]);
-        }
-        else if (i == hidden_dim.size())
-        {
-            weight[i].resize(hidden_dim[i - 1] * output_dim);
-            bias[i].resize(output_dim);
-        }
-        else
-        {
-            weight[i].resize(hidden_dim[i - 1] * hidden_dim[i]);
-            bias[i].resize(hidden_dim[i]);
-        }
-    }
-
-    // from weights dir import weight, bias, file_name format as model.0.weight, model.0.bias model.1.weight, model.1.bias ... file fromat as txt
-    // weight data fromat as: 5.775797739624977112e-02 9.274608641862869263e-02 9.097371995449066162e-02 -3.896432369947433472e-02 8.233007788658142090e-02 4.302547872066497803e-02 -5.699666216969490051e-02 1.030777990818023682e-01 -8.263161033391952515e-02 -3.941248729825019836e-02 7.196903228759765625e-02 -6.248612329363822937e-02 6.537564098834991455e-02 7.431036978960037231e-02 -8.189787715673446655e-02 3.451202437281608582e-02 1.168887317180633545e-01 -2.860546670854091644e-02 -3.589286282658576965e-02 1.100692525506019592e-01 -1.034498214721679688e-01 7.543692737817764282e-02 -6.475850939750671387e-02 4.281159024685621262e-03 -1.108226738870143890e-02 -1.018114909529685974e-01 -7.698357850313186646e-02 -4.539959132671356201e-02 5.966753140091896057e-02 6.405939906835556030e-02 -1.822711713612079620e-02 -1.113728955388069153e-01 -1.061483919620513916e-01 2.056322759017348289e-03 3.521056100726127625e-02 -3.982116468250751495e-03 -8.193900436162948608e-02 -8.821850270032882690e-02 -8.040712215006351471e-03 -3.663736209273338318e-02 9.805580973625183105e-02 4.960985481739044189e-02 -8.484749495983123779e-02 9.904786199331283569e-02 2.522131986916065216e-02 1.154022142291069031e-01 5.314904451370239258e-02 -1.036855950951576233e-01 -4.955576732754707336e-02 3.657537046819925308e-03 -4.346548020839691162e-02 7.816004008054733276e-02 -7.440515607595443726e-02 -5.466493964195251465e-02 -6.397718191146850586e-02 -7.143815606832504272e-02 -6.956502050161361694e-02 -3.572038933634757996e-02 1.183103397488594055e-01 -2.368948236107826233e-02 1.314053405076265335e-02 1.713620312511920929e-02 -6.055627949535846710e-03 9.986586123704910278e-02 -4.747605696320533752e-02 7.000513374805450439e-02 -3.205957263708114624e-02 5.325207486748695374e-02 -1.074269935488700867e-01 3.986042365431785583e-02
-    // bias data fromat as: -1.255860775709152222e-01
-    for (int i = 0; i < hidden_dim.size() + 1; i++)
-    {
-        std::string weight_file = "../weights/model." + std::to_string(i * 2) + ".weight";
-        std::string bias_file = "../weights/model." + std::to_string(i * 2) + ".bias";
-        std::ifstream weight_in(weight_file);
-        std::ifstream bias_in(bias_file);
-        if (!weight_in.is_open() || !bias_in.is_open())
-        {
-            std::cout << "file open failed" << std::endl;
-            return -1;
-        }
-        for (int j = 0; j < weight[i].size(); j++)
-        {   
-            weight_in >> weight[i][j];
-        }
-        for (int j = 0; j < bias[i].size(); j++)
-        {
-            bias_in >> bias[i][j];
-        }
-    }
-
-    // // print weight and bias
-    // for (int i = 0; i < hidden_dim.size() + 1; i++)
-    // {
-    //     for (int j = 0; j < weight[i].size(); j++)
-    //     {
-    //         std::cout << weight[i][j] << " ";
-    //     }
-    //     std::cout << std::endl;
-    //     for (int j = 0; j < bias[i].size(); j++)
-    //     {
-    //         std::cout << bias[i][j] << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    
-
-    MLP_Network *mlp_network = new MLP_Network(input_dim, output_dim, hidden_dim, weight, bias);
-
-    float *input_data, *output_data;
+    float *input_data,
+    *output_data;
 
     input_data = (float *)malloc(input_dim * sizeof(float));
     output_data = (float *)malloc(output_dim * sizeof(float));
@@ -118,9 +58,6 @@ int main(){
         printf("%f ", input_data[i]);
     }
     printf("\n");
-
-    // input_data[0] = 2;
-    // input_data[1] = 2;
 
     mlp_network->forward(input_data, output_data);
 

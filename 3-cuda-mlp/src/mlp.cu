@@ -1,5 +1,8 @@
 #include <stdio.h>
 
+#include <iostream>
+#include <fstream>
+
 #include "mlp.h"
 #include "cuda_runtime.h"
 
@@ -147,31 +150,17 @@ float *elu(float *input, int rows, int cols)
     return matrixC;
 }
 
-MLP_Network::MLP_Network(int input_dim, int output_dim, std::vector<int> hidden_dim, std::vector<std::vector<float>> weight, std::vector<std::vector<float>> bias)
+MLP_Network::MLP_Network(int input_dim, int output_dim, std::vector<int> hidden_dim)
     : input_dim_(input_dim), output_dim_(output_dim), hidden_dim_(hidden_dim)
 {
-    weights_ = new float *[hidden_dim.size() + 1];
-    biases_ = new float *[hidden_dim.size() + 1];
-    for (int i = 0; i < hidden_dim.size() + 1; i++)
-    {
-        weights_[i] = new float[hidden_dim[i] * (i == 0 ? input_dim : hidden_dim[i - 1])];
-        biases_[i] = new float[hidden_dim[i]];
-    }
+    // weights_ = new float *[hidden_dim.size() + 1];
+    // biases_ = new float *[hidden_dim.size() + 1];
+    // for (int i = 0; i < hidden_dim.size() + 1; i++)
+    // {
+    //     weights_[i] = new float[hidden_dim[i] * (i == 0 ? input_dim : hidden_dim[i - 1])];
+    //     biases_[i] = new float[hidden_dim[i]];
+    // }
 
-    //copy weights_ and bias to device
-    for (int i = 0; i < hidden_dim.size(); i++)
-    {
-        cudaMalloc(&weights_[i], hidden_dim[i] * (i == 0 ? input_dim : hidden_dim[i - 1]) * sizeof(float));
-        cudaMemcpy(weights_[i], weight[i].data(), hidden_dim[i] * (i == 0 ? input_dim : hidden_dim[i - 1]) * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMalloc(&biases_[i], hidden_dim[i] * sizeof(float));
-        cudaMemcpy(biases_[i], bias[i].data(), hidden_dim[i] * sizeof(float), cudaMemcpyHostToDevice);
-    }
-
-    //output layer
-    cudaMalloc(&weights_[hidden_dim.size()], hidden_dim[hidden_dim.size() - 1] * output_dim * sizeof(float));
-    cudaMemcpy(weights_[hidden_dim.size()], weight[hidden_dim.size()].data(), hidden_dim[hidden_dim.size() - 1] * output_dim * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMalloc(&biases_[hidden_dim.size()], output_dim * sizeof(float));
-    cudaMemcpy(biases_[hidden_dim.size()], bias[hidden_dim.size()].data(), output_dim * sizeof(float), cudaMemcpyHostToDevice);
 }
 
 MLP_Network::~MLP_Network(){
@@ -218,4 +207,115 @@ void MLP_Network::forward(float *input, float *output)
     cudaFree(d_input);
     // cudaFree(d_output);
     cudaFree(d_temp);
+}
+
+void MLP_Network::load(std::string weight_path)
+{
+    printf("Loading weights and biases from %s\n", weight_path.c_str());
+    // if (this->weights_ != NULL)
+    // {
+    //     for (int i = 0; i < hidden_dim_.size() + 1; i++)
+    //     {
+    //         cudaFree(weights_[i]);
+    //         cudaFree(biases_[i]);
+    //     }
+    // }
+    if(this->hidden_dim_.size() == 0){
+        printf("No hidden layer\n");
+    }
+    else{
+        printf("Hidden layer size: %ld\n", this->hidden_dim_.size());
+    }
+
+    //load weights and biases
+    std::vector<std::vector<float>> weight;
+    std::vector<std::vector<float>> bias;
+
+    weight.resize(this->hidden_dim_.size() + 1);
+    bias.resize(this->hidden_dim_.size() + 1);
+
+    for (int i = 0; i < this->hidden_dim_.size() + 1; i++)
+    {
+        if (i == 0)
+        {
+            weight[i].resize(this->input_dim_ * this->hidden_dim_[i]);
+            bias[i].resize(this->hidden_dim_[i]);
+        }
+        else if (i == this->hidden_dim_.size())
+        {
+            weight[i].resize(this->hidden_dim_[i - 1] * this->output_dim_);
+            bias[i].resize(this->output_dim_);
+        }
+        else
+        {
+            weight[i].resize(this->hidden_dim_[i - 1] * this->hidden_dim_[i]);
+            bias[i].resize(this->hidden_dim_[i]);
+        }
+    }
+
+    // from weights dir import weight, bias, file_name format as model.0.weight, model.0.bias model.1.weight, model.1.bias ... file fromat as txt
+    for (int i = 0; i < this->hidden_dim_.size() + 1; i++)
+    {
+        std::string weight_file = weight_path;
+        weight_file += std::to_string(i * 2) ;
+        weight_file += ".weight";
+
+        std::string bias_file = weight_path;
+        bias_file += std::to_string(i * 2);
+        bias_file += ".bias";
+
+        std::ifstream weight_in(weight_file);
+        std::ifstream bias_in(bias_file);
+        if (!weight_in.is_open() || !bias_in.is_open())
+        {
+            std::cout << "file open failed" << std::endl;
+            return ;
+        }
+        for (int j = 0; j < weight[i].size(); j++)
+        {
+            weight_in >> weight[i][j];
+        }
+        for (int j = 0; j < bias[i].size(); j++)
+        {
+            bias_in >> bias[i][j];
+        }
+    }
+
+    // // print weight and bias
+    for (int i = 0; i < this->hidden_dim_.size() + 1; i++)
+    {
+        for (int j = 0; j < weight[i].size(); j++)
+        {
+            std::cout << weight[i][j] << " ";
+        }
+        std::cout << std::endl;
+        for (int j = 0; j < bias[i].size(); j++)
+        {
+            std::cout << bias[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    weights_ = new float *[this->hidden_dim_.size() + 1];
+    biases_ = new float *[this->hidden_dim_.size() + 1];
+    for (int i = 0; i < this->hidden_dim_.size() + 1; i++)
+    {
+        weights_[i] = new float[this->hidden_dim_[i] * (i == 0 ? this->input_dim_ : this->hidden_dim_[i - 1])];
+        biases_[i] = new float[this->hidden_dim_[i]];
+    }
+
+    // copy weights_ and bias to device
+    for (int i = 0; i < this->hidden_dim_.size(); i++)
+    {
+        cudaMalloc(&weights_[i], this->hidden_dim_[i] * (i == 0 ? this->input_dim_ : this->hidden_dim_[i - 1]) * sizeof(float));
+        cudaMemcpy(weights_[i], weight[i].data(), this->hidden_dim_[i] * (i == 0 ? this->input_dim_ : this->hidden_dim_[i - 1]) * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMalloc(&biases_[i], this->hidden_dim_[i] * sizeof(float));
+        cudaMemcpy(biases_[i], bias[i].data(), this->hidden_dim_[i] * sizeof(float), cudaMemcpyHostToDevice);
+    }
+
+    // output layer
+    cudaMalloc(&weights_[this->hidden_dim_.size()], this->hidden_dim_[this->hidden_dim_.size() - 1] * this->output_dim_ * sizeof(float));
+    cudaMemcpy(weights_[this->hidden_dim_.size()], weight[this->hidden_dim_.size()].data(), this->hidden_dim_[this->hidden_dim_.size() - 1] * this->output_dim_ * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMalloc(&biases_[this->hidden_dim_.size()], this->output_dim_ * sizeof(float));
+    cudaMemcpy(biases_[this->hidden_dim_.size()], bias[this->hidden_dim_.size()].data(), this->output_dim_ * sizeof(float), cudaMemcpyHostToDevice);
 }
